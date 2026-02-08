@@ -46,6 +46,175 @@ export class TelegramBot {
     this.setupHandlers();
   }
 
+  private async processTranslationInBackground(
+    userId: string,
+    chatId: number,
+    filePath: string,
+    query: string,
+    instructions: string
+  ): Promise<void> {
+    const MAX_RETRIES = 3;
+    let attempt = 0;
+    let lastError: Error | null = null;
+
+    while (attempt < MAX_RETRIES) {
+      try {
+        attempt++;
+        logger.info(`Starting background translation for user ${userId}, file: ${filePath} (attempt ${attempt}/${MAX_RETRIES})`);
+
+        if (attempt > 1) {
+          await this.bot.telegram.sendMessage(
+            chatId,
+            `🔄 Retrying translation (attempt ${attempt}/${MAX_RETRIES})...`
+          );
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+
+        // Send typing indicator
+        await this.bot.telegram.sendChatAction(chatId, 'upload_document');
+
+        // Extract language from caption/instructions
+        let sourceLang = 'en';
+        let targetLang = 'es';
+
+        const lowerInstructions = instructions.toLowerCase();
+        if (lowerInstructions.includes('to spanish') || lowerInstructions.includes('a español')) {
+          targetLang = 'es';
+        } else if (lowerInstructions.includes('to english') || lowerInstructions.includes('a inglés')) {
+          targetLang = 'en';
+        } else if (lowerInstructions.includes('to french') || lowerInstructions.includes('a francés')) {
+          targetLang = 'fr';
+        }
+
+        logger.info(`Translating ${filePath} from ${sourceLang} to ${targetLang}`);
+
+        // Call translate_pdf tool DIRECTLY (no LLM overhead)
+        const result = await this.mcpClient.executeTool('translate_pdf', {
+          filePath,
+          sourceLang,
+          targetLang,
+        });
+
+        logger.info(`Translation result:`, JSON.stringify(result, null, 2));
+
+        // Parse the result
+        let translatedFilePath: string | null = null;
+        let originalFileName = filePath.split('/').pop() || 'document';
+        let fileSize = 'N/A';
+
+        if (result && typeof result === 'object') {
+          const content = (result as any).content || [];
+          logger.info(`Result content array length: ${content.length}`);
+
+          for (const item of content) {
+            logger.info(`Content item type: ${item.type}`);
+            if (item.type === 'text') {
+              logger.info(`Text content: ${item.text}`);
+              try {
+                const data = JSON.parse(item.text);
+                logger.info(`Parsed data:`, JSON.stringify(data, null, 2));
+
+                if (data.translatedFile) {
+                  translatedFilePath = data.translatedFile;
+                  originalFileName = data.originalFile?.split('/').pop() || originalFileName;
+                  fileSize = data.fileSizeReadable || fileSize;
+
+                  logger.info(`✅ Found translated file path: ${translatedFilePath}`);
+                  logger.info(`   Original file: ${originalFileName}`);
+                  logger.info(`   Size: ${fileSize}`);
+                }
+              } catch (err) {
+                logger.error('Error parsing tool result:', err);
+              }
+            }
+          }
+        }
+
+        // Send the file if we got it
+        if (translatedFilePath && existsSync(translatedFilePath)) {
+          const fs = await import('fs/promises');
+          const fileStats = await fs.stat(translatedFilePath);
+
+          logger.info(`📤 Sending translated file to user: ${translatedFilePath}`);
+          logger.info(`   File exists: ${existsSync(translatedFilePath)}`);
+          logger.info(`   File size on disk: ${fileStats.size} bytes`);
+
+          await this.bot.telegram.sendDocument(chatId, { source: translatedFilePath });
+
+          await this.bot.telegram.sendMessage(
+            chatId,
+            `✅ Translation complete!\n\n📄 Original: ${originalFileName}\n📊 Size: ${fileSize}`
+          );
+
+          logger.info(`Background translation completed successfully for user ${userId}`);
+          return; // Success! Exit the retry loop
+        } else {
+          throw new Error(`Translated file not found: ${translatedFilePath}`);
+        }
+      } catch (error: any) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        logger.error(`Background translation error for user ${userId} (attempt ${attempt}/${MAX_RETRIES}):`, error);
+
+        // Special handling for timeout errors - file might have been created anyway
+        if (error?.message?.includes('timeout') || error?.code === -32001) {
+          logger.warn(`MCP timeout detected, checking if translation completed anyway...`);
+
+          // Wait for file to potentially finish writing
+          await new Promise(resolve => setTimeout(resolve, 10000));
+
+          const tempDir = join(process.cwd(), 'temp');
+          const fs = await import('fs/promises');
+
+          // List all files that match the translated pattern
+          const files = await fs.readdir(tempDir);
+          const fileName = filePath.split('/').pop() || '';
+
+          logger.info(`Looking for translated file matching: translated_*${fileName}`);
+          logger.info(`Files in temp dir: ${files.filter(f => f.includes('translated_')).join(', ')}`);
+
+          // Find the translated file (could have extra prefix)
+          const translatedFile = files.find(f =>
+            f.startsWith('translated_') && f.endsWith(fileName.replace(/^\d+_/, ''))
+          );
+
+          if (translatedFile) {
+            const fullPath = join(tempDir, translatedFile);
+            logger.info(`✅ Translation file found despite timeout: ${fullPath}`);
+
+            await this.bot.telegram.sendDocument(chatId, { source: fullPath });
+            await this.bot.telegram.sendMessage(chatId, '✅ Translation completed successfully!');
+            return; // Success!
+          } else {
+            logger.error(`Translation file not found. Searched for pattern: translated_*${fileName}`);
+          }
+        }
+
+        if (attempt < MAX_RETRIES) {
+          // Wait before retrying (exponential backoff)
+          const delaySeconds = Math.pow(2, attempt) * 5; // 10s, 20s, 40s
+          logger.info(`Retrying in ${delaySeconds} seconds...`);
+
+          await this.bot.telegram.sendMessage(
+            chatId,
+            `⚠️ Translation attempt ${attempt} failed. Retrying in ${delaySeconds} seconds...`
+          );
+
+          await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
+        }
+      }
+    }
+
+    // If we get here, all retries failed
+    logger.error(`All ${MAX_RETRIES} translation attempts failed for user ${userId}`);
+    await this.bot.telegram.sendMessage(
+      chatId,
+      `❌ Translation failed after ${MAX_RETRIES} attempts.\n\n` +
+      `Error: ${lastError?.message || 'Unknown error'}\n\n` +
+      `Please try again later or contact support.`
+    );
+  }
+
   private setupHandlers(): void {
     // Ensure temp directory exists
     const tempDir = join(process.cwd(), 'temp');
@@ -190,9 +359,7 @@ export class TelegramBot {
         // Build query with file path
         const query = caption
           ? `${caption}\n\nFile path: ${localFilePath}`
-          : `I received a file at ${localFilePath}. What should I do with it?`;
-
-        await ctx.sendChatAction('typing');
+          : `Translate this document: ${localFilePath}`;
 
         // Get available tools
         const tools = this.mcpClient.getAllTools();
@@ -202,64 +369,65 @@ export class TelegramBot {
           return;
         }
 
-        // Get session
-        const session = this.sessionManager.getSession(userId);
+        // Check if there's a translate_pdf tool available
+        const hasTranslateTool = tools.some(t => t.name === 'translate_pdf');
 
-        // Add user message to history
-        const userMessage: ConversationMessage = {
-          role: 'user',
-          content: query,
-          timestamp: Date.now(),
-        };
-        this.sessionManager.addMessage(userId, userMessage);
+        if (hasTranslateTool) {
+          // Respond immediately
+          await ctx.reply(
+            `🔄 Your document is being translated...\n\n` +
+            `📄 File: ${document.file_name}\n` +
+            `📊 Size: ${fileSizeMB.toFixed(2)} MB\n\n` +
+            `I'll send you the translated document when it's ready. This may take a few minutes.`
+          );
 
-        // Store tool results to check for files
-        const toolResults: any[] = [];
+          // Store chatId for sending the file later
+          const chatId = ctx.chat.id;
 
-        // Process query with LLM
-        const llmResponse = await this.llmOrchestrator.processQuery(
-          query,
-          session.conversationHistory,
-          tools,
-          async (toolName, args) => {
-            logger.info(`Executing tool ${toolName} for user ${userId}`, args);
-            await ctx.sendChatAction('typing');
-            const result = await this.mcpClient.executeTool(toolName, args);
-            logger.info(`Tool result:`, result);
-            toolResults.push({ toolName, result });
-            return result;
-          }
-        );
+          // Process translation in background (no await)
+          this.processTranslationInBackground(
+            userId,
+            chatId,
+            localFilePath,
+            query,
+            caption || 'Translate to Spanish'
+          ).catch((error) => {
+            logger.error(`Background translation failed for user ${userId}:`, error);
+            this.bot.telegram.sendMessage(
+              chatId,
+              `❌ Translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+            ).catch(err => logger.error('Failed to send error message:', err));
+          });
+        } else {
+          // No translation tool, process normally
+          await ctx.sendChatAction('typing');
+          const session = this.sessionManager.getSession(userId);
 
-        // Add assistant response to history
-        const assistantMessage: ConversationMessage = {
-          role: 'assistant',
-          content: llmResponse,
-          timestamp: Date.now(),
-        };
-        this.sessionManager.addMessage(userId, assistantMessage);
+          const userMessage: ConversationMessage = {
+            role: 'user',
+            content: query,
+            timestamp: Date.now(),
+          };
+          this.sessionManager.addMessage(userId, userMessage);
 
-        // Send text response
-        await ctx.reply(llmResponse, { parse_mode: 'Markdown' });
-
-        // Check if any tool returned a translated file
-        for (const { toolName, result } of toolResults) {
-          if (result && typeof result === 'object') {
-            const content = (result as any).content || [];
-            for (const item of content) {
-              if (item.type === 'text') {
-                try {
-                  const data = JSON.parse(item.text);
-                  if (data.translatedFile && existsSync(data.translatedFile)) {
-                    logger.info(`Sending translated file: ${data.translatedFile}`);
-                    await ctx.replyWithDocument({ source: data.translatedFile });
-                  }
-                } catch (err) {
-                  // Not JSON or file doesn't exist, skip
-                }
-              }
+          const llmResponse = await this.llmOrchestrator.processQuery(
+            query,
+            session.conversationHistory,
+            tools,
+            async (toolName, args) => {
+              logger.info(`Executing tool ${toolName} for user ${userId}`);
+              return await this.mcpClient.executeTool(toolName, args);
             }
-          }
+          );
+
+          const assistantMessage: ConversationMessage = {
+            role: 'assistant',
+            content: llmResponse,
+            timestamp: Date.now(),
+          };
+          this.sessionManager.addMessage(userId, assistantMessage);
+
+          await ctx.reply(llmResponse);
         }
 
       } catch (error) {
