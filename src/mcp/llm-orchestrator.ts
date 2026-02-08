@@ -27,17 +27,20 @@ export class LLMOrchestrator {
     }
   }
 
-  private convertMCPToolsToAITools(mcpTools: MCPTool[]): Record<string, CoreTool> {
+  private convertMCPToolsToAITools(
+    mcpTools: MCPTool[],
+    onToolCall: (toolName: string, args: Record<string, unknown>) => Promise<unknown>
+  ): Record<string, CoreTool> {
     const tools: Record<string, CoreTool> = {};
 
     for (const tool of mcpTools) {
       tools[tool.name] = {
         description: tool.description,
         parameters: jsonSchema(tool.inputSchema as any),
-        execute: async () => {
-          // This will be handled by the tool executor
-          // We return a placeholder that signals tool execution is needed
-          throw new Error('Tool execution should be handled externally');
+        execute: async (args: Record<string, unknown>) => {
+          logger.info(`Executing tool via AI SDK: ${tool.name}`);
+          const result = await onToolCall(tool.name, args);
+          return result;
         },
       };
     }
@@ -55,7 +58,7 @@ export class LLMOrchestrator {
       logger.info(`Processing query with ${availableTools.length} available tools`);
 
       const model = this.getModel();
-      const tools = this.convertMCPToolsToAITools(availableTools);
+      const tools = this.convertMCPToolsToAITools(availableTools, onToolCall);
 
       // Build messages array from conversation history
       const messages: CoreMessage[] = conversationHistory.map((msg) => ({
@@ -86,21 +89,6 @@ Provide clear, concise responses and explain what you're doing when using tools.
 
       logger.info(`LLM response received with ${response.steps.length} steps`);
 
-      // Process tool calls if any
-      for (const step of response.steps) {
-        if (step.toolCalls && step.toolCalls.length > 0) {
-          for (const toolCall of step.toolCalls) {
-            logger.info(`Tool call requested: ${toolCall.toolName}`);
-            try {
-              const result = await onToolCall(toolCall.toolName, toolCall.args);
-              logger.info(`Tool call ${toolCall.toolName} completed`);
-            } catch (error) {
-              logger.error(`Tool call ${toolCall.toolName} failed:`, error);
-            }
-          }
-        }
-      }
-
       return response.text;
     } catch (error) {
       logger.error('Failed to process query:', error);
@@ -117,7 +105,7 @@ Provide clear, concise responses and explain what you're doing when using tools.
       logger.info(`Processing simple query with ${availableTools.length} available tools`);
 
       const model = this.getModel();
-      const tools = this.convertMCPToolsToAITools(availableTools);
+      const tools = this.convertMCPToolsToAITools(availableTools, onToolCall);
 
       const systemPrompt = `You are a helpful AI assistant with access to various tools through the Model Context Protocol (MCP).
 You can help users by using the available tools to perform tasks, access data, and answer questions.
@@ -140,17 +128,6 @@ Provide clear, concise responses and explain what you're doing when using tools.
       });
 
       logger.info(`LLM response received`);
-
-      // The AI SDK automatically handles tool calls
-      // We just need to execute them through our callback
-      for (const step of response.steps) {
-        if (step.toolCalls && step.toolCalls.length > 0) {
-          for (const toolCall of step.toolCalls) {
-            logger.info(`Executing tool: ${toolCall.toolName}`);
-            await onToolCall(toolCall.toolName, toolCall.args);
-          }
-        }
-      }
 
       return response.text;
     } catch (error) {
