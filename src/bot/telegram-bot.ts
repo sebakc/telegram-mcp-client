@@ -188,10 +188,16 @@ Just send me a message to chat!`);
         if (this.config.telegram.useLocalApi && this.config.telegram.apiUrl) {
           // LOCAL API MODE: file.file_path is an absolute path on the filesystem
           // The file already exists on disk (inside the Docker volume mapped directory), just copy it
+          if (!file.file_path) {
+            throw new Error('file_path is missing from Telegram API response');
+          }
           logger.info(`Local API mode - file path: ${file.file_path}`);
-          await fs.copyFile(file.file_path!, localFilePath);
+          await fs.copyFile(file.file_path, localFilePath);
         } else {
           // PUBLIC API MODE: Download file via HTTP
+          if (!file.file_path) {
+            throw new Error('file_path is missing from Telegram API response');
+          }
           const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.botToken}/${file.file_path}`;
           logger.info(`Downloading from: ${fileUrl}`);
           const response = await fetch(fileUrl);
