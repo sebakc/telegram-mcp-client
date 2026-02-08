@@ -181,6 +181,11 @@ Just send me a message to chat!`);
         // Get file info
         const file = await this.bot.telegram.getFile(document.file_id);
 
+        // Validate file_path is present
+        if (!file.file_path) {
+          throw new Error('file_path is missing from Telegram API response');
+        }
+
         const tempDir = join(process.cwd(), 'temp');
         const localFilePath = join(tempDir, `${userId}_${document.file_name}`);
         const fs = await import('fs/promises');
@@ -188,16 +193,14 @@ Just send me a message to chat!`);
         if (this.config.telegram.useLocalApi && this.config.telegram.apiUrl) {
           // LOCAL API MODE: file.file_path is an absolute path on the filesystem
           // The file already exists on disk (inside the Docker volume mapped directory), just copy it
-          if (!file.file_path) {
-            throw new Error('file_path is missing from Telegram API response');
-          }
           logger.info(`Local API mode - file path: ${file.file_path}`);
-          await fs.copyFile(file.file_path, localFilePath);
+          try {
+            await fs.copyFile(file.file_path, localFilePath);
+          } catch (error) {
+            throw new Error(`Failed to copy file from ${file.file_path}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
         } else {
           // PUBLIC API MODE: Download file via HTTP
-          if (!file.file_path) {
-            throw new Error('file_path is missing from Telegram API response');
-          }
           const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.botToken}/${file.file_path}`;
           logger.info(`Downloading from: ${fileUrl}`);
           const response = await fetch(fileUrl);
