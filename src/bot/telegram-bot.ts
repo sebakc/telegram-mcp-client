@@ -181,24 +181,25 @@ Just send me a message to chat!`);
         // Get file info
         const file = await this.bot.telegram.getFile(document.file_id);
 
-        // Use the correct API root (local or public)
-        const apiRoot = this.config.telegram.useLocalApi && this.config.telegram.apiUrl
-          ? this.config.telegram.apiUrl
-          : 'https://api.telegram.org';
-
-        const fileUrl = `${apiRoot}/file/bot${this.config.telegram.botToken}/${file.file_path}`;
-        logger.info(`Downloading from: ${fileUrl}`);
-
-        // Download file
         const tempDir = join(process.cwd(), 'temp');
         const localFilePath = join(tempDir, `${userId}_${document.file_name}`);
-
-        const response = await fetch(fileUrl);
-        const buffer = await response.arrayBuffer();
         const fs = await import('fs/promises');
-        await fs.writeFile(localFilePath, Buffer.from(buffer));
 
-        logger.info(`File downloaded: ${localFilePath}`);
+        if (this.config.telegram.useLocalApi && this.config.telegram.apiUrl) {
+          // LOCAL API MODE: file.file_path is an absolute path on the filesystem
+          // The file already exists on disk (inside the Docker volume mapped directory), just copy it
+          logger.info(`Local API mode - file path: ${file.file_path}`);
+          await fs.copyFile(file.file_path!, localFilePath);
+        } else {
+          // PUBLIC API MODE: Download file via HTTP
+          const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.botToken}/${file.file_path}`;
+          logger.info(`Downloading from: ${fileUrl}`);
+          const response = await fetch(fileUrl);
+          const buffer = await response.arrayBuffer();
+          await fs.writeFile(localFilePath, Buffer.from(buffer));
+        }
+
+        logger.info(`File ready: ${localFilePath}`);
 
         // Build query with file path
         const query = caption
