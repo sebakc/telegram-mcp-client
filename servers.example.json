@@ -1,0 +1,25 @@
+{
+  "servers": [
+    {
+      "id": "filesystem",
+      "name": "File System Server",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/tmp"
+      ],
+      "autoConnect": false
+    },
+    {
+      "id": "memory",
+      "name": "Memory Server",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "autoConnect": true
+    }
+  ]
+}

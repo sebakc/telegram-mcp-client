@@ -1,0 +1,35 @@
+{
+  "servers": [
+    {
+      "id": "pdf-translator",
+      "name": "PDF Translator",
+      "command": "node",
+      "args": [
+        "--env-file=/Users/s.vega/dev/personal/pdf-translator/api/.env",
+        "/Users/s.vega/dev/personal/pdf-translator/api/src/mcp-server.js"
+      ],
+      "autoConnect": true
+    },
+    {
+      "id": "filesystem",
+      "name": "File System Server",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/tmp"
+      ],
+      "autoConnect": false
+    },
+    {
+      "id": "memory",
+      "name": "Memory Server",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "autoConnect": false
+    }
+  ]
+}
