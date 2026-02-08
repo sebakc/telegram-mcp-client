@@ -25,6 +25,7 @@ export class MCPClient {
         },
         {
           capabilities: {},
+          timeout: Number.MAX_SAFE_INTEGER, // Virtually no timeout - responses are async/decoupled
         }
       );
 

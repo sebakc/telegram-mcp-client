@@ -72,10 +72,11 @@ export class LLMOrchestrator {
         content: query,
       });
 
-      const systemPrompt = `You are a helpful AI assistant with access to various tools through the Model Context Protocol (MCP).
-You can help users by using the available tools to perform tasks, access data, and answer questions.
-Always use the appropriate tools when they can help answer the user's question.
-Provide clear, concise responses and explain what you're doing when using tools.`;
+      const systemPrompt = `Eres un asistente de IA útil con acceso a varias herramientas a través del Protocolo de Contexto de Modelo (MCP).
+Puedes ayudar a los usuarios usando las herramientas disponibles para realizar tareas, acceder a datos y responder preguntas.
+Siempre usa las herramientas apropiadas cuando puedan ayudar a responder la pregunta del usuario.
+Proporciona respuestas claras y concisas, y explica lo que estás haciendo cuando uses herramientas.
+IMPORTANTE: Siempre debes responder en español.`;
 
       let response = await generateText({
         model,
@@ -107,10 +108,11 @@ Provide clear, concise responses and explain what you're doing when using tools.
       const model = this.getModel();
       const tools = this.convertMCPToolsToAITools(availableTools, onToolCall);
 
-      const systemPrompt = `You are a helpful AI assistant with access to various tools through the Model Context Protocol (MCP).
-You can help users by using the available tools to perform tasks, access data, and answer questions.
-Always use the appropriate tools when they can help answer the user's question.
-Provide clear, concise responses and explain what you're doing when using tools.`;
+      const systemPrompt = `Eres un asistente de IA útil con acceso a varias herramientas a través del Protocolo de Contexto de Modelo (MCP).
+Puedes ayudar a los usuarios usando las herramientas disponibles para realizar tareas, acceder a datos y responder preguntas.
+Siempre usa las herramientas apropiadas cuando puedan ayudar a responder la pregunta del usuario.
+Proporciona respuestas claras y concisas, y explica lo que estás haciendo cuando uses herramientas.
+IMPORTANTE: Siempre debes responder en español.`;
 
       const response = await generateText({
         model,
