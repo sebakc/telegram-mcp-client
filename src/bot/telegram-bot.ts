@@ -188,8 +188,11 @@ Just send me a message to chat!`);
 
         if (this.config.telegram.useLocalApi && this.config.telegram.apiUrl) {
           // LOCAL API MODE: file.file_path is an absolute path on the filesystem
+          if (!file.file_path) {
+            throw new Error('File path is undefined in local API mode');
+          }
           logger.info(`Local API mode - file path: ${file.file_path}`);
-          await fs.copyFile(file.file_path!, localFilePath);
+          await fs.copyFile(file.file_path, localFilePath);
         } else {
           // PUBLIC API MODE: Download file via HTTP
           const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.botToken}/${file.file_path}`;
