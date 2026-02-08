@@ -44,10 +44,10 @@ docker run -d \
   --restart=always \
   -e TELEGRAM_API_ID="$TELEGRAM_API_ID" \
   -e TELEGRAM_API_HASH="$TELEGRAM_API_HASH" \
+  -e TELEGRAM_LOCAL=true \
   -v "$DATA_DIR:/var/lib/telegram-bot-api" \
   -p 8081:8081 \
-  aiogram/telegram-bot-api:latest \
-  --local
+  aiogram/telegram-bot-api:latest
 
 # Wait and verify
 sleep 3
