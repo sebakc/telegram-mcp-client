@@ -65,7 +65,7 @@ export class TelegramBot {
         if (attempt > 1) {
           await this.bot.telegram.sendMessage(
             chatId,
-            `🔄 Retrying translation (attempt ${attempt}/${MAX_RETRIES})...`
+            `🔄 Reintentando traducción (intento ${attempt}/${MAX_RETRIES})...`
           );
           // Wait before retry
           await new Promise(resolve => setTimeout(resolve, 5000));
@@ -113,7 +113,7 @@ export class TelegramBot {
               logger.info(`Text content: ${item.text}`);
               try {
                 const data = JSON.parse(item.text);
-                logger.info(`Parsed data:`, JSON.stringify(data, null, 2));
+                logger.info(`Parsed data:`, data);
 
                 if (data.translatedFile) {
                   translatedFilePath = data.translatedFile;
@@ -144,13 +144,13 @@ export class TelegramBot {
 
           await this.bot.telegram.sendMessage(
             chatId,
-            `✅ Translation complete!\n\n📄 Original: ${originalFileName}\n📊 Size: ${fileSize}`
+            `✅ ¡Traducción completada!\n\n📄 Original: ${originalFileName}\n📊 Tamaño: ${fileSize}`
           );
 
           logger.info(`Background translation completed successfully for user ${userId}`);
           return; // Success! Exit the retry loop
         } else {
-          throw new Error(`Translated file not found: ${translatedFilePath}`);
+          throw new Error(`Archivo traducido no encontrado: ${translatedFilePath}`);
         }
       } catch (error: any) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -183,7 +183,7 @@ export class TelegramBot {
             logger.info(`✅ Translation file found despite timeout: ${fullPath}`);
 
             await this.bot.telegram.sendDocument(chatId, { source: fullPath });
-            await this.bot.telegram.sendMessage(chatId, '✅ Translation completed successfully!');
+            await this.bot.telegram.sendMessage(chatId, '✅ ¡Traducción completada exitosamente!');
             return; // Success!
           } else {
             logger.error(`Translation file not found. Searched for pattern: translated_*${fileName}`);
@@ -197,7 +197,7 @@ export class TelegramBot {
 
           await this.bot.telegram.sendMessage(
             chatId,
-            `⚠️ Translation attempt ${attempt} failed. Retrying in ${delaySeconds} seconds...`
+            `⚠️ Intento de traducción ${attempt} falló. Reintentando en ${delaySeconds} segundos...`
           );
 
           await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
@@ -209,9 +209,9 @@ export class TelegramBot {
     logger.error(`All ${MAX_RETRIES} translation attempts failed for user ${userId}`);
     await this.bot.telegram.sendMessage(
       chatId,
-      `❌ Translation failed after ${MAX_RETRIES} attempts.\n\n` +
-      `Error: ${lastError?.message || 'Unknown error'}\n\n` +
-      `Please try again later or contact support.`
+      `❌ La traducción falló después de ${MAX_RETRIES} intentos.\n\n` +
+      `Error: ${lastError?.message || 'Error desconocido'}\n\n` +
+      `Por favor intenta de nuevo más tarde o contacta a soporte.`
     );
   }
 
@@ -224,21 +224,21 @@ export class TelegramBot {
 
     // Start command
     this.bot.command('start', async (ctx) => {
-      const welcomeMessage = `Welcome to MCP Telegram Client! 🤖\n\nI'm an AI assistant powered by the Model Context Protocol.\n\nAvailable commands:\n/help - Show this help message\n/connect <server_id> - Connect to an MCP server\n/disconnect <server_id> - Disconnect from a server\n/servers - List all connected servers and available tools\n/reset - Clear conversation history\n\nYou can send me:\n- Text messages\n- PDF documents (I can translate them!)\n\nJust upload a file and tell me what you want to do with it!`;
+      const welcomeMessage = `¡Bienvenido al Cliente MCP de Telegram! 🤖\n\nSoy un asistente de IA impulsado por el Protocolo de Contexto de Modelo.\n\nComandos disponibles:\n/help - Mostrar este mensaje de ayuda\n/connect <server_id> - Conectar a un servidor MCP\n/disconnect <server_id> - Desconectar de un servidor\n/servers - Listar servidores conectados y herramientas disponibles\n/reset - Limpiar historial de conversación\n\nPuedes enviarme:\n- Mensajes de texto\n- Documentos PDF (¡puedo traducirlos!)\n\n¡Simplemente sube un archivo y dime qué quieres hacer con él!`;
 
       await ctx.reply(welcomeMessage);
     });
 
     // Help command
     this.bot.command('help', async (ctx) => {
-      await ctx.reply(`Available commands:\n/start - Welcome message\n/help - Show this help\n/connect <server_id> - Connect to MCP server\n/disconnect <server_id> - Disconnect from server\n/servers - List connected servers and tools\n/reset - Clear conversation history\n\nJust send me a message to chat!`);
+      await ctx.reply(`Comandos disponibles:\n/start - Mensaje de bienvenida\n/help - Mostrar esta ayuda\n/connect <server_id> - Conectar a servidor MCP\n/disconnect <server_id> - Desconectar del servidor\n/servers - Listar servidores y herramientas conectadas\n/reset - Limpiar historial de conversación\n\n¡Simplemente envíame un mensaje para chatear!`);
     });
 
     // Connect command
     this.bot.command('connect', async (ctx) => {
       const args = ctx.message.text.split(' ').slice(1);
       if (args.length === 0) {
-        await ctx.reply('Usage: /connect <server_id>\n\nAvailable servers: (configure in servers.json)');
+        await ctx.reply('Uso: /connect <server_id>\n\nServidores disponibles: (configurar en servers.json)');
         return;
       }
 
@@ -246,12 +246,12 @@ export class TelegramBot {
       const userId = ctx.from.id.toString();
 
       try {
-        await ctx.reply(`Connecting to ${serverId}...`);
+        await ctx.reply(`Conectando a ${serverId}...`);
 
         // Find server config
         const serverConfig = this.config.mcp.servers.find((s) => s.id === serverId);
         if (!serverConfig) {
-          await ctx.reply(`Server ${serverId} not found in configuration.`);
+          await ctx.reply(`Servidor ${serverId} no encontrado en la configuración.`);
           return;
         }
 
@@ -260,11 +260,11 @@ export class TelegramBot {
 
         const tools = this.mcpClient.getAllTools();
         await ctx.reply(
-          `✅ Connected to ${serverConfig.name}!\n\nAvailable tools (${tools.length}):\n${tools.map((t) => `• ${t.name}: ${t.description}`).join('\n')}`
+          `✅ Conectado a ${serverConfig.name}!\n\nHerramientas disponibles (${tools.length}):\n${tools.map((t) => `• ${t.name}: ${t.description}`).join('\n')}`
         );
       } catch (error) {
         logger.error('Failed to connect to server:', error);
-        await ctx.reply(`❌ Failed to connect to ${serverId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        await ctx.reply(`❌ Error al conectar a ${serverId}: ${error instanceof Error ? error.message : 'Error desconocido'}`);
       }
     });
 
@@ -272,7 +272,7 @@ export class TelegramBot {
     this.bot.command('disconnect', async (ctx) => {
       const args = ctx.message.text.split(' ').slice(1);
       if (args.length === 0) {
-        await ctx.reply('Usage: /disconnect <server_id>');
+        await ctx.reply('Uso: /disconnect <server_id>');
         return;
       }
 
@@ -282,10 +282,10 @@ export class TelegramBot {
       try {
         await this.mcpClient.disconnect(serverId);
         this.sessionManager.removeActiveServer(userId, serverId);
-        await ctx.reply(`✅ Disconnected from ${serverId}`);
+        await ctx.reply(`✅ Desconectado de ${serverId}`);
       } catch (error) {
         logger.error('Failed to disconnect:', error);
-        await ctx.reply(`❌ Failed to disconnect: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        await ctx.reply(`❌ Error al desconectar: ${error instanceof Error ? error.message : 'Error desconocido'}`);
       }
     });
 
@@ -295,12 +295,12 @@ export class TelegramBot {
       const tools = this.mcpClient.getAllTools();
 
       if (connectedServers.length === 0) {
-        await ctx.reply('No servers connected. Use /connect <server_id> to connect to a server.');
+        await ctx.reply('No hay servidores conectados. Usa /connect <server_id> para conectar a un servidor.');
         return;
       }
 
-      let message = `📡 Connected Servers (${connectedServers.length}):\n${connectedServers.map((s) => `• ${s}`).join('\n')}\n\n`;
-      message += `🔧 Available Tools (${tools.length}):\n${tools.map((t) => `• ${t.name}: ${t.description}`).join('\n')}`;
+      let message = `📡 Servidores Conectados (${connectedServers.length}):\n${connectedServers.map((s) => `• ${s}`).join('\n')}\n\n`;
+      message += `🔧 Herramientas Disponibles (${tools.length}):\n${tools.map((t) => `• ${t.name}: ${t.description}`).join('\n')}`;
 
       await ctx.reply(message);
     });
@@ -309,7 +309,7 @@ export class TelegramBot {
     this.bot.command('reset', async (ctx) => {
       const userId = ctx.from.id.toString();
       this.sessionManager.clearHistory(userId);
-      await ctx.reply('✅ Conversation history cleared!');
+      await ctx.reply('✅ Historial de conversación limpiado!');
     });
 
     // Handle documents (PDFs, etc.)
@@ -365,7 +365,7 @@ export class TelegramBot {
         const tools = this.mcpClient.getAllTools();
 
         if (tools.length === 0) {
-          await ctx.reply('No MCP servers connected. Please use /connect to connect to a server first.');
+          await ctx.reply('No hay servidores MCP conectados. Por favor usa /connect para conectar primero a un servidor.');
           return;
         }
 
@@ -375,10 +375,10 @@ export class TelegramBot {
         if (hasTranslateTool) {
           // Respond immediately
           await ctx.reply(
-            `🔄 Your document is being translated...\n\n` +
-            `📄 File: ${document.file_name}\n` +
-            `📊 Size: ${fileSizeMB.toFixed(2)} MB\n\n` +
-            `I'll send you the translated document when it's ready. This may take a few minutes.`
+            `🔄 Tu documento está siendo traducido...\n\n` +
+            `📄 Archivo: ${document.file_name}\n` +
+            `📊 Tamaño: ${fileSizeMB.toFixed(2)} MB\n\n` +
+            `Te enviaré el documento traducido cuando esté listo. Esto puede tomar unos minutos.`
           );
 
           // Store chatId for sending the file later
@@ -395,7 +395,7 @@ export class TelegramBot {
             logger.error(`Background translation failed for user ${userId}:`, error);
             this.bot.telegram.sendMessage(
               chatId,
-              `❌ Translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+              `❌ Error en la traducción: ${error instanceof Error ? error.message : 'Error desconocido'}`
             ).catch(err => logger.error('Failed to send error message:', err));
           });
         } else {
@@ -432,7 +432,7 @@ export class TelegramBot {
 
       } catch (error) {
         logger.error('Error processing document:', error);
-        await ctx.reply(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);
+        await ctx.reply(`❌ Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
       }
     });
 
@@ -454,11 +454,6 @@ export class TelegramBot {
 
         // Get available tools
         const tools = this.mcpClient.getAllTools();
-
-        if (tools.length === 0) {
-          await ctx.reply('No MCP servers connected. Please use /connect to connect to a server first.');
-          return;
-        }
 
         // Get session
         const session = this.sessionManager.getSession(userId);
@@ -520,14 +515,14 @@ export class TelegramBot {
         }
       } catch (error) {
         logger.error('Error processing message:', error);
-        await ctx.reply(`❌ Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);
+        await ctx.reply(`❌ Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
       }
     });
 
     // Error handling
     this.bot.catch((err, ctx) => {
       logger.error('Bot error:', err);
-      ctx.reply('An error occurred while processing your request.');
+      ctx.reply('Ocurrió un error al procesar tu solicitud.');
     });
   }
 
