@@ -55,37 +55,14 @@ export class TelegramBot {
 
     // Start command
     this.bot.command('start', async (ctx) => {
-      const welcomeMessage = `Welcome to MCP Telegram Client! 🤖
-
-I'm an AI assistant powered by the Model Context Protocol.
-
-Available commands:
-/help - Show this help message
-/connect <server_id> - Connect to an MCP server
-/disconnect <server_id> - Disconnect from a server
-/servers - List all connected servers and available tools
-/reset - Clear conversation history
-
-You can send me:
-- Text messages
-- PDF documents (I can translate them!)
-
-Just upload a file and tell me what you want to do with it!`;
+      const welcomeMessage = `Welcome to MCP Telegram Client! 🤖\n\nI'm an AI assistant powered by the Model Context Protocol.\n\nAvailable commands:\n/help - Show this help message\n/connect <server_id> - Connect to an MCP server\n/disconnect <server_id> - Disconnect from a server\n/servers - List all connected servers and available tools\n/reset - Clear conversation history\n\nYou can send me:\n- Text messages\n- PDF documents (I can translate them!)\n\nJust upload a file and tell me what you want to do with it!`;
 
       await ctx.reply(welcomeMessage);
     });
 
     // Help command
     this.bot.command('help', async (ctx) => {
-      await ctx.reply(`Available commands:
-/start - Welcome message
-/help - Show this help
-/connect <server_id> - Connect to MCP server
-/disconnect <server_id> - Disconnect from server
-/servers - List connected servers and tools
-/reset - Clear conversation history
-
-Just send me a message to chat!`);
+      await ctx.reply(`Available commands:\n/start - Welcome message\n/help - Show this help\n/connect <server_id> - Connect to MCP server\n/disconnect <server_id> - Disconnect from server\n/servers - List connected servers and tools\n/reset - Clear conversation history\n\nJust send me a message to chat!`);
     });
 
     // Connect command
@@ -187,12 +164,18 @@ Just send me a message to chat!`);
         const fs = await import('fs/promises');
 
         if (this.config.telegram.useLocalApi && this.config.telegram.apiUrl) {
-          // LOCAL API MODE: file.file_path is an absolute path on the filesystem
+          // LOCAL API MODE: file.file_path is an absolute path inside the Docker container
+          // We need to map it to the host volume path since the app runs on the host
           if (!file.file_path) {
             throw new Error('File path is undefined in local API mode');
           }
-          logger.info(`Local API mode - file path: ${file.file_path}`);
-          await fs.copyFile(file.file_path, localFilePath);
+          const containerBasePath = '/var/lib/telegram-bot-api';
+          const hostBasePath = process.env.TELEGRAM_LOCAL_DATA_DIR || `${process.env.HOME}/telegram-bot-api-data`;
+          const hostFilePath = file.file_path.replace(containerBasePath, hostBasePath);
+
+          logger.info(`Local API mode - container path: ${file.file_path}`);
+          logger.info(`Local API mode - host path: ${hostFilePath}`);
+          await fs.copyFile(hostFilePath, localFilePath);
         } else {
           // PUBLIC API MODE: Download file via HTTP
           const fileUrl = `https://api.telegram.org/file/bot${this.config.telegram.botToken}/${file.file_path}`;
